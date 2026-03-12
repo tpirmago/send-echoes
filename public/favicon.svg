@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="cork" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C8952E"/>
+      <stop offset="100%" stop-color="#7A5412"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="rgba(180,220,255,0.35)"/>
+      <stop offset="50%"  stop-color="rgba(180,220,255,0.12)"/>
+      <stop offset="100%" stop-color="rgba(180,220,255,0.28)"/>
+    </linearGradient>
+    <clipPath id="body-clip">
+      <path d="M 11 15 C 6 18 3 21 3 24 L 3 27.5 Q 3 31 16 31 Q 29 31 29 27.5 L 29 24 C 29 21 26 18 21 15 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Bottle outline (drawn first so spheres appear inside) -->
+  <path d="M 11 9 L 11 15 C 6 18 3 21 3 24 L 3 27.5 Q 3 31 16 31 Q 29 31 29 27.5 L 29 24 C 29 21 26 18 21 15 L 21 9 Z"
+        fill="url(#glass)" stroke="#1F2937" stroke-width="1.5" stroke-linejoin="round"/>
+
+  <!-- Spheres clipped to bottle body -->
+  <g clip-path="url(#body-clip)">
+    <circle cx="10" cy="27" r="4"   fill="#8B5CF6" fill-opacity="0.65"/>
+    <circle cx="16" cy="24" r="4"   fill="#14B8A6" fill-opacity="0.65"/>
+    <circle cx="22" cy="27" r="4"   fill="#EC4899" fill-opacity="0.65"/>
+  </g>
+
+  <!-- Shoulder overlay (glass over spheres) -->
+  <path d="M 11 9 L 11 15 C 6 18 3 21 3 24 L 29 24 C 29 21 26 18 21 15 L 21 9 Z"
+        fill="url(#glass)" stroke="none"/>
+  <path d="M 11 9 L 11 15 C 6 18 3 21 3 24" fill="none" stroke="#1F2937" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M 21 9 L 21 15 C 26 18 29 21 29 24" fill="none" stroke="#1F2937" stroke-width="1.5" stroke-linejoin="round"/>
+
+  <!-- Cork -->
+  <rect x="11" y="1" width="10" height="8" rx="2" fill="url(#cork)"/>
+  <line x1="11" y1="4"   x2="21" y2="4"   stroke="rgba(0,0,0,0.15)" stroke-width="0.8"/>
+  <line x1="11" y1="6.5" x2="21" y2="6.5" stroke="rgba(0,0,0,0.10)" stroke-width="0.6"/>
+</svg>

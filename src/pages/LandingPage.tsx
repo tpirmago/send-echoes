@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { GlassBottle } from '../components/bottle/GlassBottle';
 import { ECHO_CONFIG, ECHO_TYPES } from '../utils/echoConfig';
@@ -22,8 +22,6 @@ const DEMO_SPHERES = Array.from({ length: 23 }, (_, i) => ({
 export function LandingPage() {
   const { user } = useAuth();
   const { data: echoes } = useEchoes(); // only fires when user is set
-  const navigate = useNavigate();
-
   const [selectedType, setSelectedType] = useState<EchoType>('myself');
   const [droppingSphere, setDroppingSphere] = useState<{ id: string; color: string } | null>(null);
   // Demo spheres that have landed — kept in bottle after drop
@@ -146,7 +144,7 @@ export function LandingPage() {
               disabled={!!droppingSphere}
               style={dropBtnStyle}
             >
-              {droppingSphere ? 'Dropping…' : 'Drop an Echo ✦'}
+              {droppingSphere ? 'Dropping…' : 'Drop an Echo'}
             </button>
           )}
         </motion.div>
@@ -257,14 +255,14 @@ const bottleWrapStyle: React.CSSProperties = {
 };
 
 const dropBtnStyle: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.8)',
-  border: '1.5px solid #e5e7eb',
+  background: 'transparent',
+  border: '1.5px solid #1a1a2e',
   borderRadius: 999,
-  padding: '9px 22px',
+  padding: '6px 16px',
   fontSize: 13,
   fontWeight: 600,
   cursor: 'pointer',
-  color: '#374151',
+  color: '#1a1a2e',
   transition: 'all 0.15s',
 };
 
@@ -286,4 +284,5 @@ const blurbStyle: React.CSSProperties = {
   flex: '1 1 200px',
   backdropFilter: 'blur(8px)',
   border: '1px solid rgba(255,255,255,0.6)',
+  boxShadow: '0 0 0 1.5px rgba(139,92,246,0.25), 0 4px 16px rgba(139,92,246,0.08)',
 };
