@@ -1,73 +1,63 @@
-# React + TypeScript + Vite
+# Send Echoes
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Write a message, seal it, and choose when it unlocks. A letter to your future self, a goals capsule, or a voice recording — each one stays hidden until the moment you picked.
 
-Currently, two official plugins are available:
+## What it does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+You create an Echo, give it a title and content, then set an unlock date (at least tomorrow — no peeking today). On that date the message becomes readable. Until then it sits sealed in your bottle, waiting.
 
-## React Compiler
+There are three kinds of Echo:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Echo to Myself** — a text letter to your future self
+- **Goals Echo** — write down what you want to achieve and come back to it later
+- **Voice Echo** — record a voice message or upload an audio file
 
-## Expanding the ESLint configuration
+## Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- React 19 + TypeScript + Vite
+- Framer Motion — animations and the bottle drop effect
+- Supabase — auth, database, file storage
+- TanStack Query — data fetching and caching
+- React Router — routing
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Getting started
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+1. Clone the repo and install dependencies:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+2. Create a project at [supabase.com](https://supabase.com), then copy the example env file and fill in your credentials:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+cp .env.example .env
+```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+3. Run the migration in your Supabase SQL Editor:
+
+```
+supabase/migrations/001_init.sql
+```
+
+4. In Supabase Auth settings, disable email confirmation (for local dev).
+
+5. Start the dev server:
+
+```bash
+npm run dev
+```
+
+## Project structure
+
+```
+src/
+  components/   # GlassBottle, EchoCard, Nav, ProtectedLayout
+  context/      # AuthContext
+  hooks/        # useEchoes, useCreateEcho
+  pages/        # LandingPage, AuthPage, CreateEchoPage, MyEchoesPage, EchoDetailPage
+  types/        # Echo types and DB types
+  utils/        # Echo config (colors, gradients, labels)
+supabase/
+  migrations/   # DB schema, RLS policies, triggers
 ```

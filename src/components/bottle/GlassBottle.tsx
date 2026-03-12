@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface SphereData {
   id: string;
@@ -15,7 +15,6 @@ interface GlassBottleProps {
 }
 
 const SPHERE_R = 14;
-const MAX_SPHERES = 67;
 
 // Grid positions inside the bottle body — 7 cols × 10 rows = 70 slots, filled bottom-up
 const GRID: Array<{ x: number; y: number }> = (() => {
@@ -36,39 +35,33 @@ const FLOAT_PATTERNS = [
   { x: [ 2, -3,  1, -2,  2], y: [0, -5, -8, -2, 0] },
 ];
 
-type DropPhase = 'falling' | 'sliding' | 'overflow-exit' | null;
-
 export function GlassBottle({ spheres, droppingSphere, onDropComplete }: GlassBottleProps) {
   // dropTarget = next available grid slot (spheres.length because dropping sphere is excluded)
   const dropTarget = GRID[Math.min(spheres.length, GRID.length - 1)];
   const corkLifted = !!droppingSphere;
-  const isOverflow = spheres.length >= MAX_SPHERES;
 
-  const [dropPhase, setDropPhase] = useState<DropPhase>(null);
   // ID of the sphere that just landed — suppresses its enter animation for a seamless transition
   const [justLandedId, setJustLandedId] = useState<string | null>(null);
+  // Prevent onDropComplete from firing more than once per drop
+  const firedRef = useRef(false);
 
-  // useLayoutEffect fires before paint → dropPhase is set in the same frame as droppingSphere,
-  // so the cork opens and the sphere starts falling without any intermediate flash.
-  useLayoutEffect(() => {
-    if (droppingSphere) {
-      setDropPhase('falling');
-    } else {
-      setDropPhase(null);
-    }
-  }, [droppingSphere?.id, !!droppingSphere]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (droppingSphere) firedRef.current = false;
+  }, [droppingSphere?.id]);
+
+  // The sphere falls and slides horizontally in ONE spring animation.
+  // cx={100} is the SVG base position; `x` transform shifts it to the final column.
+  const targetX = dropTarget.x - 100; // how far left/right from center
+  const startY  = -SPHERE_R - 12 - dropTarget.y; // starts this many px above its final cy
 
   function handleAnimComplete() {
-    if (dropPhase === 'falling') {
-      setDropPhase(isOverflow ? 'overflow-exit' : 'sliding');
-    } else if (dropPhase === 'sliding' || dropPhase === 'overflow-exit') {
-      if (dropPhase === 'sliding' && droppingSphere) {
-        // Remember the real id so when it appears in the resting group we skip enter-anim
-        setJustLandedId(droppingSphere.id);
-        setTimeout(() => setJustLandedId(null), 100);
-      }
-      onDropComplete?.();
+    if (firedRef.current) return;
+    firedRef.current = true;
+    if (droppingSphere) {
+      setJustLandedId(droppingSphere.id);
+      setTimeout(() => setJustLandedId(null), 100);
     }
+    onDropComplete?.();
   }
 
   return (
@@ -160,8 +153,8 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete }: GlassBo
       />
 
       {/* ── RESTING SPHERES (clipped to bottle interior) ── */}
-      {/* droppingSphere is excluded from this list in the parent. When it lands,
-          justLandedId suppresses its enter animation for a seamless swap. */}
+      {/* droppingSphere is excluded from this list by the parent.
+          justLandedId suppresses the enter animation for a seamless swap. */}
       <g clipPath="url(#bottle-body-clip)">
         <AnimatePresence>
           {spheres.map((sphere, i) => {
@@ -210,14 +203,12 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete }: GlassBo
       </g>
 
       {/* ── DROPPING SPHERE ── */}
-      {/* Phase 1 (falling): spring from above the bottle to its target row.
-          Phase 2 (sliding): spring from center (cx=100) to its target column.
-          Phase 3 (overflow-exit): fade out when bottle is full.
-          On completion the sphere is moved to the resting group by the parent — same id,
-          no enter animation, so the user sees one continuous sphere throughout. */}
+      {/* Single-phase animation: falls AND slides to its final grid position simultaneously.
+          Uses CSS x/y transforms (not SVG cx) so the exit can lock them at their final values
+          and prevent any upward drift when the element unmounts. */}
       <g clipPath="url(#drop-sphere-clip)">
         <AnimatePresence>
-          {droppingSphere && dropPhase && (
+          {droppingSphere && (
             <motion.circle
               key="dropping"
               cx={100}
@@ -227,25 +218,16 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete }: GlassBo
               fillOpacity={0.45}
               filter="url(#drop-glow)"
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-              initial={{ y: -SPHERE_R - 12 - dropTarget.y, opacity: 0 }}
-              animate={
-                dropPhase === 'falling'
-                  ? { y: 0, opacity: 1 }
-                  : dropPhase === 'sliding'
-                  ? { cx: dropTarget.x }
-                  : { opacity: 0 } // overflow-exit
-              }
-              transition={
-                dropPhase === 'falling'
-                  ? {
-                      y: { type: 'spring', stiffness: 85, damping: 20, mass: 1.5, delay: 0.52 },
-                      opacity: { duration: 0, delay: 0.52 },
-                    }
-                  : dropPhase === 'sliding'
-                  ? { type: 'spring', stiffness: 260, damping: 22 }
-                  : { duration: 0.3 }
-              }
-              exit={{ opacity: 0, transition: { duration: 0 } }}
+              initial={{ x: 0, y: startY, opacity: 0 }}
+              animate={{ x: targetX, y: 0, opacity: 1 }}
+              // Exit locks x/y at their FINAL values so framer-motion cannot
+              // animate them back toward initial on unmount.
+              exit={{ x: targetX, y: 0, opacity: 0, transition: { duration: 0 } }}
+              transition={{
+                x: { type: 'spring', stiffness: 85, damping: 20, mass: 1.5, delay: 0.52 },
+                y: { type: 'spring', stiffness: 85, damping: 20, mass: 1.5, delay: 0.52 },
+                opacity: { duration: 0, delay: 0.52 },
+              }}
               onAnimationComplete={handleAnimComplete}
             />
           )}

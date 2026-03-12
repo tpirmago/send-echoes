@@ -8,12 +8,16 @@ import { useEchoes } from '../hooks/useEchoes';
 import { Nav } from '../components/ui/Nav';
 import type { EchoType } from '../types/echo';
 
-// Placeholder spheres shown to non-authenticated visitors
-const DEMO_SPHERES = [
-  { id: 'd1', color: ECHO_CONFIG.myself.color },
-  { id: 'd2', color: ECHO_CONFIG.goals.color },
-  { id: 'd3', color: ECHO_CONFIG.voice.color },
+// Placeholder spheres shown to non-authenticated visitors (~1/3 of bottle = 23 spheres)
+const DEMO_COLORS = [
+  ECHO_CONFIG.myself.color,
+  ECHO_CONFIG.goals.color,
+  ECHO_CONFIG.voice.color,
 ];
+const DEMO_SPHERES = Array.from({ length: 23 }, (_, i) => ({
+  id: `d${i}`,
+  color: DEMO_COLORS[i % DEMO_COLORS.length],
+}));
 
 export function LandingPage() {
   const { user } = useAuth();
@@ -33,19 +37,14 @@ export function LandingPage() {
     ...extraSpheres,
   ];
 
-  const handleDemoCreate = useCallback(() => {
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
-    navigate('/create');
-  }, [user, navigate]);
-
-  // Demo drop animation (only on landing page when logged in)
+  // Demo drop animation — available for both guests and logged-in users
   const handleDropDemo = useCallback(() => {
-    if (!user || droppingSphere) return;
-    setDroppingSphere({ id: `demo-${Date.now()}`, color: ECHO_CONFIG[selectedType].color });
-  }, [user, droppingSphere, selectedType]);
+    if (droppingSphere) return;
+    const color = user
+      ? ECHO_CONFIG[selectedType].color
+      : DEMO_COLORS[Math.floor(Math.random() * DEMO_COLORS.length)];
+    setDroppingSphere({ id: `demo-${Date.now()}`, color });
+  }, [droppingSphere, user, selectedType]);
 
   const handleDropComplete = useCallback(() => {
     if (droppingSphere) {
@@ -142,8 +141,12 @@ export function LandingPage() {
 
           {/* CTA for guests */}
           {!user && (
-            <button onClick={handleDemoCreate} style={dropBtnStyle}>
-              Try it — start writing
+            <button
+              onClick={handleDropDemo}
+              disabled={!!droppingSphere}
+              style={dropBtnStyle}
+            >
+              {droppingSphere ? 'Dropping…' : 'Drop an Echo ✦'}
             </button>
           )}
         </motion.div>
