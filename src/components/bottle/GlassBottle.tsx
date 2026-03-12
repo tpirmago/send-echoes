@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useLayoutEffect } from 'react';
 
 interface SphereData {
   id: string;
@@ -7,11 +7,11 @@ interface SphereData {
 }
 
 interface GlassBottleProps {
+  /** Resting spheres — must NOT include the currently-dropping sphere */
   spheres: SphereData[];
+  /** Sphere being dropped — pass real id+color so the enter-anim skip works */
   droppingSphere?: SphereData | null;
   onDropComplete?: () => void;
-  /** ID of the sphere that just landed — skip its enter animation for a seamless swap */
-  skipEnterAnimId?: string | null;
 }
 
 const SPHERE_R = 14;
@@ -29,7 +29,6 @@ const GRID: Array<{ x: number; y: number }> = (() => {
   return positions;
 })();
 
-// Four gentle float patterns — each sphere gets a slightly different drift
 const FLOAT_PATTERNS = [
   { x: [-2,  3, -1,  2, -2], y: [0, -4, -7, -3, 0] },
   { x: [ 3, -2,  4, -1,  3], y: [0, -6, -3, -8, 0] },
@@ -39,15 +38,19 @@ const FLOAT_PATTERNS = [
 
 type DropPhase = 'falling' | 'sliding' | 'overflow-exit' | null;
 
-export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnterAnimId }: GlassBottleProps) {
+export function GlassBottle({ spheres, droppingSphere, onDropComplete }: GlassBottleProps) {
+  // dropTarget = next available grid slot (spheres.length because dropping sphere is excluded)
   const dropTarget = GRID[Math.min(spheres.length, GRID.length - 1)];
   const corkLifted = !!droppingSphere;
   const isOverflow = spheres.length >= MAX_SPHERES;
 
   const [dropPhase, setDropPhase] = useState<DropPhase>(null);
+  // ID of the sphere that just landed — suppresses its enter animation for a seamless transition
+  const [justLandedId, setJustLandedId] = useState<string | null>(null);
 
-  // Start phase when a new sphere arrives; reset when cleared
-  useEffect(() => {
+  // useLayoutEffect fires before paint → dropPhase is set in the same frame as droppingSphere,
+  // so the cork opens and the sphere starts falling without any intermediate flash.
+  useLayoutEffect(() => {
     if (droppingSphere) {
       setDropPhase('falling');
     } else {
@@ -59,6 +62,11 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
     if (dropPhase === 'falling') {
       setDropPhase(isOverflow ? 'overflow-exit' : 'sliding');
     } else if (dropPhase === 'sliding' || dropPhase === 'overflow-exit') {
+      if (dropPhase === 'sliding' && droppingSphere) {
+        // Remember the real id so when it appears in the resting group we skip enter-anim
+        setJustLandedId(droppingSphere.id);
+        setTimeout(() => setJustLandedId(null), 100);
+      }
       onDropComplete?.();
     }
   }
@@ -151,14 +159,16 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
         strokeLinejoin="round"
       />
 
-      {/* ── FLOATING SPHERES (clipped to bottle interior) ── */}
+      {/* ── RESTING SPHERES (clipped to bottle interior) ── */}
+      {/* droppingSphere is excluded from this list in the parent. When it lands,
+          justLandedId suppresses its enter animation for a seamless swap. */}
       <g clipPath="url(#bottle-body-clip)">
         <AnimatePresence>
           {spheres.map((sphere, i) => {
             const pos = GRID[i];
             if (!pos) return null;
             const pat = FLOAT_PATTERNS[i % 4];
-            const isNew = sphere.id === skipEnterAnimId;
+            const skipAnim = sphere.id === justLandedId;
             return (
               <motion.circle
                 key={sphere.id}
@@ -169,7 +179,7 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
                 fillOpacity={0.45}
                 filter="url(#sphere-glow)"
                 style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                initial={isNew ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0 }}
+                initial={skipAnim ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0 }}
                 animate={{
                   opacity: 1,
                   scale: 1,
@@ -178,8 +188,8 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
                 }}
                 exit={{ opacity: 0, scale: 0 }}
                 transition={{
-                  opacity: { duration: isNew ? 0 : 0.4 },
-                  scale: { type: 'spring', stiffness: 200, duration: isNew ? 0 : 0.4 },
+                  opacity: { duration: skipAnim ? 0 : 0.4 },
+                  scale: { type: 'spring', stiffness: 200, duration: skipAnim ? 0 : 0.4 },
                   x: {
                     duration: 5 + (i % 4) * 0.7,
                     repeat: Infinity,
@@ -200,8 +210,11 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
       </g>
 
       {/* ── DROPPING SPHERE ── */}
-      {/* Phase 1 (falling): y spring from above; Phase 2 (sliding): x spring to grid column */}
-      {/* Phase 3 (overflow-exit): fade out if bottle is full */}
+      {/* Phase 1 (falling): spring from above the bottle to its target row.
+          Phase 2 (sliding): spring from center (cx=100) to its target column.
+          Phase 3 (overflow-exit): fade out when bottle is full.
+          On completion the sphere is moved to the resting group by the parent — same id,
+          no enter animation, so the user sees one continuous sphere throughout. */}
       <g clipPath="url(#drop-sphere-clip)">
         <AnimatePresence>
           {droppingSphere && dropPhase && (
@@ -219,14 +232,13 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
                 dropPhase === 'falling'
                   ? { y: 0, opacity: 1 }
                   : dropPhase === 'sliding'
-                  // cx is a SVG user-unit value — no CSS-px vs SVG-unit mismatch
                   ? { cx: dropTarget.x }
                   : { opacity: 0 } // overflow-exit
               }
               transition={
                 dropPhase === 'falling'
                   ? {
-                      y: { type: 'spring', stiffness: 85, damping: 12, mass: 1.5, delay: 0.52 },
+                      y: { type: 'spring', stiffness: 85, damping: 20, mass: 1.5, delay: 0.52 },
                       opacity: { duration: 0, delay: 0.52 },
                     }
                   : dropPhase === 'sliding'
@@ -240,9 +252,8 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
         </AnimatePresence>
       </g>
 
-      {/* ── NECK + SHOULDER OVERLAY (drawn after sphere so glass walls appear in front) ── */}
+      {/* ── NECK + SHOULDER OVERLAY (drawn after spheres so glass walls appear in front) ── */}
       <g clipPath="url(#neck-overlay-clip)">
-        {/* Fill — closed path so the glass color covers neck/shoulders */}
         <path
           d="M 83 48 L 83 120
              C 68 140 30 165 26 188
@@ -252,7 +263,6 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
           fill="url(#glass-fill)"
           stroke="none"
         />
-        {/* Left neck + shoulder outline (no bottom segment) */}
         <path
           d="M 83 48 L 83 120 C 68 140 30 165 26 188"
           fill="none"
@@ -260,7 +270,6 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
           strokeWidth="2"
           strokeLinejoin="round"
         />
-        {/* Right neck + shoulder outline (no bottom segment) */}
         <path
           d="M 117 48 L 117 120 C 132 140 170 165 174 188"
           fill="none"
@@ -268,28 +277,23 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
           strokeWidth="2"
           strokeLinejoin="round"
         />
-        {/* Left neck highlight (re-applied on top) */}
         <path d="M 84 50 L 84 118 L 91 118 L 92 50 Z" fill="rgba(255,255,255,0.36)" />
-        {/* Shoulder glint (re-applied on top) */}
         <path
           d="M 34 192 C 42 180 60 168 83 155 C 59 172 40 186 34 196 Z"
           fill="rgba(255,255,255,0.20)"
         />
       </g>
 
-      {/* ── SHOULDER BUMP RING (replaces horizontal line) ── */}
+      {/* ── SHOULDER BUMP RING ── */}
       <ellipse cx="100" cy="188" rx="74" ry="6.5" fill="url(#bump-grad)" />
       <ellipse cx="100" cy="186" rx="68" ry="3.5" fill="rgba(235,248,255,0.38)" />
 
       {/* ── GLASS HIGHLIGHTS ── */}
-      {/* Left body edge */}
       <path
         d="M 22 192 C 26 198 33 218 35 264 L 35 378 C 32 390 24 403 22 409 L 22 192 Z"
         fill="url(#left-highlight)"
         opacity="0.72"
       />
-      {/* Left neck strip and shoulder glint are rendered in the neck overlay above */}
-      {/* Right inner body shine */}
       <path
         d="M 156 202 C 158 208 159 274 158 377 C 161 377 162 208 160 202 Z"
         fill="rgba(255,255,255,0.11)"
@@ -311,7 +315,6 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
       />
 
       {/* ── CORK (drawn last — occludes sphere as it passes through neck) ── */}
-      {/* Arc trajectory: shoots up first, then swings to the left */}
       <motion.g
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         animate={
@@ -326,11 +329,9 @@ export function GlassBottle({ spheres, droppingSphere, onDropComplete, skipEnter
         }
       >
         <rect x="79" y="8" width="42" height="42" rx="6" fill="url(#cork-grad)" />
-        {/* Wood grain */}
         <line x1="79" y1="21" x2="121" y2="21" stroke="rgba(0,0,0,0.14)" strokeWidth="1" />
         <line x1="79" y1="30" x2="121" y2="30" stroke="rgba(0,0,0,0.10)" strokeWidth="0.8" />
         <line x1="79" y1="38" x2="121" y2="38" stroke="rgba(0,0,0,0.07)" strokeWidth="0.6" />
-        {/* Cork top highlight */}
         <rect x="83" y="11" width="16" height="5" rx="2.5" fill="rgba(255,255,255,0.28)" />
       </motion.g>
     </svg>

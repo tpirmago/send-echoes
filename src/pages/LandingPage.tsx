@@ -24,7 +24,7 @@ export function LandingPage() {
   const [droppingSphere, setDroppingSphere] = useState<{ id: string; color: string } | null>(null);
   // Demo spheres that have landed — kept in bottle after drop
   const [extraSpheres, setExtraSpheres] = useState<{ id: string; color: string }[]>([]);
-  const [justDroppedId, setJustDroppedId] = useState<string | null>(null);
+
 
   const spheres = [
     ...(user
@@ -49,9 +49,7 @@ export function LandingPage() {
 
   const handleDropComplete = useCallback(() => {
     if (droppingSphere) {
-      setJustDroppedId(droppingSphere.id);
       setExtraSpheres((prev) => [...prev, droppingSphere]);
-      setTimeout(() => setJustDroppedId(null), 100);
     }
     setDroppingSphere(null);
   }, [droppingSphere]);
@@ -106,7 +104,6 @@ export function LandingPage() {
             spheres={spheres}
             droppingSphere={droppingSphere}
             onDropComplete={handleDropComplete}
-            skipEnterAnimId={justDroppedId}
           />
 
           {/* Demo type picker + drop button (visible when logged in on landing) */}
@@ -159,12 +156,12 @@ export function LandingPage() {
             key={b.title}
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
+            whileHover={{ boxShadow: '0 0 0 2px #8B5CF6, 0 4px 24px rgba(139,92,246,0.18)' }}
             viewport={{ once: true }}
             transition={{ duration: 0.35 }}
             style={blurbStyle}
           >
-            <span style={{ fontSize: 28 }}>{b.emoji}</span>
-            <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1a1a2e', margin: '8px 0 4px' }}>{b.title}</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1a1a2e', margin: '0 0 4px' }}>{b.title}</h3>
             <p style={{ fontSize: 13, color: '#6b7280', margin: 0, lineHeight: 1.5 }}>{b.text}</p>
           </motion.div>
         ))}
@@ -175,9 +172,9 @@ export function LandingPage() {
 }
 
 const BLURBS = [
-  { emoji: '🔒', title: 'Sealed until ready', text: 'No peeking. Your message is locked until the date you choose.' },
-  { emoji: '✉️', title: 'Send to anyone', text: 'Share an Echo with a friend, partner, or future child.' },
-  { emoji: '✨', title: 'A moment of wonder', text: "When it unlocks, you'll receive a notification — and rediscover what you wrote." },
+  { title: 'Sealed until ready', text: 'No peeking. Your message is locked until the date you choose' },
+  { title: 'Choose how to send your Echo', text: 'Write a letter, capture a goal, or record a voice message' },
+  { title: 'A moment of wonder', text: 'When it unlocks, open it and rediscover what you wrote' },
 ];
 
 // ── Styles ──────────────────────────────────────────────────────────────────

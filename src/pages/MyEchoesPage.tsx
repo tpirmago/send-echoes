@@ -5,16 +5,15 @@ import { useDeleteEcho } from '../hooks/useDeleteEcho';
 import { EchoCard } from '../components/echo/EchoCard';
 import { GlassBottle } from '../components/bottle/GlassBottle';
 import { ECHO_CONFIG } from '../utils/echoConfig';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useLayoutEffect, useMemo, useRef } from 'react';
 import type { EchoType } from '../types/echo';
 
-type Filter = 'all' | 'sealed' | 'unsealed' | 'opened';
+type Filter = 'all' | 'sealed' | 'unsealed';
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'sealed', label: 'Sealed' },
   { value: 'unsealed', label: 'Unsealed' },
-  { value: 'opened', label: 'Opened' },
 ];
 
 export function MyEchoesPage() {
@@ -25,47 +24,43 @@ export function MyEchoesPage() {
 
   const newEchoType = (location.state as { newEchoType?: EchoType } | null)?.newEchoType ?? null;
 
-  // Hide the newest sphere from the bottle until the drop animation plays
-  const [animating, setAnimating] = useState(() => !!newEchoType);
-  const [droppingSphere, setDroppingSphere] = useState<{ id: string; color: string } | null>(null);
-  const [hasTriggered, setHasTriggered] = useState(false);
-  // ID of the sphere that just completed its drop — suppress its enter animation for a seamless swap
-  const [justDroppedId, setJustDroppedId] = useState<string | null>(null);
+  // ID of the sphere currently being animated into the bottle.
+  // While this is set, the sphere is excluded from the resting list and rendered as "dropping".
+  const [animatingId, setAnimatingId] = useState<string | null>(null);
+  // Prevents the animation from triggering more than once per navigation
+  const hasTriggeredRef = useRef(false);
 
-  // Echoes sorted oldest-first → stable GRID positions (oldest = bottom of bottle)
+  // All sealed echoes sorted oldest-first → stable GRID positions
   const sortedSpheres = useMemo(() => {
     if (!echoes) return [];
     return [...echoes]
+      .filter((e) => !e.isUnlocked)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map((e) => ({ id: e.id, color: ECHO_CONFIG[e.type].color }));
   }, [echoes]);
 
-  // While animating: hide the newest sphere (last in oldest-first order).
-  // dropTarget in GlassBottle = GRID[spheres.length] = exact slot for the new echo.
-  const spheres = animating && sortedSpheres.length > 0
-    ? sortedSpheres.slice(0, -1)
+  // While the sphere is dropping, exclude it from the resting list so it never
+  // appears statically in the bottle before the animation plays.
+  const bottleSpheres = animatingId
+    ? sortedSpheres.filter((s) => s.id !== animatingId)
     : sortedSpheres;
 
-  // Trigger only once React Query finishes the background refetch (isFetching=false),
-  // which guarantees the new echo is present in `echoes`.
-  useEffect(() => {
-    if (!newEchoType || hasTriggered || isFetching || !echoes || echoes.length === 0) return;
-    setHasTriggered(true);
-    const t = setTimeout(() => {
-      setDroppingSphere({ id: 'new-drop', color: ECHO_CONFIG[newEchoType].color });
-    }, 350);
-    return () => clearTimeout(t);
-  }, [newEchoType, echoes, hasTriggered, isFetching]);
+  // Real id + color of the sphere being dropped (passed to GlassBottle).
+  const droppingSphere = animatingId
+    ? (sortedSpheres.find((s) => s.id === animatingId) ?? null)
+    : null;
 
-  const handleDropComplete = useCallback(() => {
-    // Remember the new sphere's ID so GlassBottle can skip its enter animation
-    const newId = sortedSpheres[sortedSpheres.length - 1]?.id ?? null;
-    setJustDroppedId(newId);
-    setDroppingSphere(null);
-    setAnimating(false);
-    // Clear after one render cycle so future re-mounts animate normally
-    if (newId) setTimeout(() => setJustDroppedId(null), 100);
-  }, [sortedSpheres]);
+  // useLayoutEffect fires synchronously before the browser paints.
+  // This guarantees that when the new sphere first appears in sortedSpheres, animatingId is
+  // already set — so the sphere is immediately excluded from the resting group and only
+  // ever rendered through the drop animation, never as an instant "pop-in".
+  useLayoutEffect(() => {
+    if (!newEchoType || hasTriggeredRef.current || isFetching || !sortedSpheres.length) return;
+    const newest = sortedSpheres[sortedSpheres.length - 1];
+    if (!newest) return;
+    hasTriggeredRef.current = true;
+    setAnimatingId(newest.id);
+  }, [newEchoType, sortedSpheres, isFetching]);
 
   return (
     <div style={pageStyle}>
@@ -73,17 +68,16 @@ export function MyEchoesPage() {
       <div style={heroStyle}>
         <div style={bottleWrapStyle}>
           <GlassBottle
-            spheres={spheres}
+            spheres={bottleSpheres}
             droppingSphere={droppingSphere}
-            onDropComplete={handleDropComplete}
-            skipEnterAnimId={justDroppedId}
+            onDropComplete={() => setAnimatingId(null)}
           />
         </div>
         <div style={heroTextStyle}>
           <h1 style={headingStyle}>My Echoes</h1>
           <p style={subStyle}>
-            {echoes?.length
-              ? `${echoes.length} ${echoes.length === 1 ? 'echo' : 'echoes'} sealed inside`
+            {sortedSpheres.length > 0
+              ? `${sortedSpheres.length} ${sortedSpheres.length === 1 ? 'echo' : 'echoes'} inside`
               : 'Your bottle is empty — send your first Echo.'}
           </p>
           <Link to="/create" style={createLinkStyle}>
@@ -137,7 +131,6 @@ export function MyEchoesPage() {
             {echoes?.filter((e) => {
               if (filter === 'sealed') return !e.isUnlocked;
               if (filter === 'unsealed') return e.isUnlocked && !e.openedAt;
-              if (filter === 'opened') return !!e.openedAt;
               return true;
             }).map((echo, i) => (
               <motion.div

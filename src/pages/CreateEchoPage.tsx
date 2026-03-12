@@ -21,7 +21,9 @@ interface FormData {
   files: File[];
 }
 
-const MIN_DATE = new Date().toISOString().split('T')[0];
+const tomorrow = new Date();
+tomorrow.setDate(tomorrow.getDate() + 1);
+const MIN_DATE = tomorrow.toISOString().split('T')[0];
 
 const STEP_LABELS = ['Choose type', 'Write', 'Seal'];
 
